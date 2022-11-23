@@ -1,0 +1,437 @@
+#!/usr/bin/perl
+use warnings;
+
+use DBI;
+use CGI qw(:standard *table);
+use CGI::Ajax;
+use CGI::Carp qw(fatalsToBrowser);
+use strict;
+
+        my $dsn = 'DBI:mysql:YTD:localhost';
+        my $db_user_name = 'root';
+        my $db_password = 'sh7XclC';
+        my $cgi = new CGI;
+
+        my $pjx = new CGI::Ajax (
+                                        'exported_HTML'=>\&HTML,
+					'exported_HTML_1' =>\&HTML_1,
+					'JS_Login' =>\&Login,
+					'JS_View' =>\&View,
+					'JS_Create' =>\&Create,
+					'DB_insert' =>\&DB1,
+					'Screen_view' =>\&Screen,
+					'AdFinMenu' =>\&AdFin,
+                                );
+
+print $pjx->build_html($cgi, \&HTML);
+
+
+
+
+sub Create {
+my @Shop;
+my @list;
+my @DateDump;
+my $id = `date +%s`;
+chomp($id);
+my $creature;
+my $i;
+my @Aud;
+my @put;
+         my @AuditType = ('Internal Scheduled Audit','External Scheduled Audit','Internal Random Audit','External Random Audit');
+         my @Auditors = ('Khordikov Yuri','Golovanov Mikhail','Artamonov Nikolai','Filimonov Dmitriy');
+  my $dbh = DBI -> connect ($dsn, $db_user_name, $db_password) or die "error can\'t connect to DB";
+  my $sth = $dbh -> prepare ("select DISTINCT shop from shopList GROUP BY shop HAVING COUNT(shop) >0");
+        $sth -> execute ();
+        push @Shop, "<select id=\"Shop\" Onclick=\"DB1_insert(['Shops'],['ShopList']);\">";
+               while ( @put = $sth->fetchrow_array){push @Shop,"<option value = \"$put[0]\">$put[0]</option>";}
+
+        push @Shop,"</select>";
+
+	push @list,"<select id=\"Type\" Onclick=\"DB1_insert(['TypeAudit'],['Type']);\">";
+	      for($i=0;$i<=$#AuditType;$i++){
+        push @list,"<option value = \"$AuditType[$i]\"> $AuditType[$i]</option>";
+					}
+	push @list,"</select>";
+
+	push @Aud,"<select id=\"Aud\" Onclick=\"DB1_insert(['Auditors'],['Aud']);\">";
+		 for($i=0;$i<=$#Auditors;$i++){
+        push @Aud,"<option value = \"$Auditors[$i]\"> $Auditors[$i]</option>";
+                                        }
+        push @Aud,"</select>";
+	
+push @DateDump,q^<br><select id="date"  OnClick="DB1_insert(['date'],['personal']);">^;
+for (my $i = 0; $i <= 360; $i++){my $tdate = `date --date='+$i day' +%d-%m-%Y`; push @DateDump, "<option value = '$tdate'>$tdate</option>";}
+push @DateDump,'</select>';
+
+
+
+$creature = <<EON;
+<div><br>
+        <table border = '1'>
+            <tr>
+		<td>Audit Type:<br>@list</td>
+		<td>Enter Start Date @DateDump<br></td>
+	<td>Enter Audit Number<br><input type="text" name="Num" id="Num"></td>
+		<td>Observer<br><input type="text" name="Obs" id="Obs"></td>
+		<td>ID: $id<input type = "hidden" id = "Ident" name = "Ident" value='$id'></td>
+                </tr>
+            <tr align=left>
+                <td>Shop or Procedure<br> @Shop</td>
+	<td>Auditor<br>@Aud</td>
+		<td>Enter Company Name<br><input type="text" name="Comp" id="Comp" default = 'Sibir Technics'></td>
+		<td>Expert<br><input type="text" name="Exp" id="Exp"></td><td></td>
+                </tr>
+
+
+        </table>
+</div>
+<div id="submt" align = center><br>
+                        <input type="hidden" id="submt" name="button" value="3">
+                                        <BUTTON class = "Mmenu" OnClick="DB_insert(['Num','date','Comp','Ident','Type','Shop','Aud','Obs','Exp'],['button']);">Submit Data</BUTTON>
+                                </div>
+<div id='button'></div>
+
+EON
+$sth->finish;
+$dbh -> disconnect;
+
+return ($creature, @AuditType);
+
+}
+
+sub DB1{
+
+my $Num = @_[0];
+my $Sdate = @_[1];
+my $Comp = @_[2];
+my $Ident = @_[3];
+my $out;
+my $check;
+my $checks;
+my $coution;
+my $cout;
+chomp($Sdate);
+        use DBI;
+        my $dsn = 'DBI:mysql:YTD:localhost';
+        my $db_user_name = 'root';
+        my $db_password = 'sh7XclC';
+        my $dbh = DBI -> connect ($dsn, $db_user_name, $db_password) or die "error can\'t connect to DB";
+				my $query1 = "select number from audit where number = ?";
+				my $sth = $dbh -> prepare($query1);
+                                   $sth -> execute($Num);
+				my $match = $sth -> fetchrow_array;
+        if (defined $match){$check = 1;$coution = "Audit Number already exists!";}
+
+				my $query2 = "select PID from audit where PID = ?";
+				my $sth2 = $dbh -> prepare($query2);
+				$sth2 -> execute($Ident);
+				my $match1 = $sth2 -> fetchrow_array;
+	if (defined $match1){$checks = 1;$cout = "Update page by pressing 'Create Audit Plan Button'!";}
+
+                my $query = "insert into audit values (?,?,?,?,?,'','','',?,?,?,?,'','','','','','','','','')";
+                 $sth = $dbh -> prepare($query) or return('<b>ERROR IN PREPARE SUB DB1</b>');
+
+         if (defined @_[0] and @_[0] ne '' and $check != 1 and $checks != 1) {
+	 $sth -> execute ($Ident,$Num,@_[4],@_[5],$Sdate,$Comp,@_[6],@_[7],@_[8]);
+	 $out = "Audit number $_[0] is entered in DB";
+        # return ("$out");
+                                             }else{$out = "Audit Number is not filled out! $coution $cout"; 
+                                          #   return ("$out");
+                                                   }
+#Ниже раздел для заполнения таблиц PlanChapt и findings ###############################################################################################
+my $a;
+my @pt;
+my @Dt;
+my @Ch;
+my @Ds;
+my $query3;
+        $query = "select DocType,Chapter,Description from chapters where ShopList like \"%@_[5]%\"";
+	$sth = $dbh -> prepare($query);
+    # $q = "\"%@_[5]%\"";
+	$sth -> execute ();
+	while ( @pt = $sth->fetchrow_array){push @Dt,@pt[0];push @Ch,@pt[1];}	
+        
+        $query3 = "insert into PlanChapt (ID,DType,Chapt,Descr,status,Date) values(?,?,?,'','Planning','')";
+      my $sth3 = $dbh -> prepare($query3);
+	for ($a = 0;$a<=$#Ch;$a++) {
+if (defined @_[0] and @_[0] ne '' and $check != 1 and $checks != 1) {
+	$sth3 -> execute ($Ident,@Dt[$a],@Ch[$a]) or $out = "Error in SQL execution";
+}else{$out = "Chapters are not entered! $cout";
+}
+}
+
+$out .= "$#Ch";		
+return ("$out");
+	$sth->finish;
+	$sth2->finish;
+	 $sth3->finish;
+	$dbh -> disconnect;
+
+}
+
+
+sub View {
+my @Auds;
+my @put;
+my @out;
+my @list;
+my $i;
+my @AuditType = ('Internal Scheduled Audit','External Scheduled Audit','Internal Random Audit','External Random Audit');
+my $dbh = DBI -> connect ($dsn, $db_user_name, $db_password) or die "error can\'t connect to DB";
+my $sth = $dbh -> prepare ("select PID,Number,Subject from audit");
+$sth -> execute ();
+
+ push @Auds, "<select id=\"Screen\" Onclick=\"Screen_view(['Screen'],['Screens']);\">";
+               while ( @put = $sth->fetchrow_array){push @Auds,"<option value = \"$put[1]\">$put[1]</option>";}
+
+        push @Auds,"</select>";
+@out = <<EON;
+        <table border = '1'>
+            <tr>
+                <td>Searching Audit Number<br>@Auds</td>
+ </tr>
+
+
+        </table>
+<div id = 'Screens'></div>
+
+EON
+$sth->finish;
+$dbh -> disconnect;
+return ("@out");
+}
+
+
+sub Screen {
+my $input = $_[0];
+my $out;
+my $dbh;
+my @row;
+my @put;
+my $i;
+my $Ref;
+my @PT; my @Cha; my @Fnd; my @LV; my @STA; my $n; my @FDescr; my $Cha; my $k; my $style;
+        my $dsn = 'DBI:mysql:YTD:localhost';
+        my $db_user_name = 'root';
+        my $db_password = 'sh7XclC';
+        $dbh = DBI -> connect ($dsn, $db_user_name, $db_password) or die "error can\'t connect to DB";
+        my  $sth = $dbh -> prepare ("select PID,Type,Subject,StartDate,Company,Auditor,Observer,Expert,Status from audit where number = ?");
+        $sth -> execute ($input);
+        @row = $sth->fetchrow_array;
+				
+				$sth = $dbh -> prepare ("select DType,Chapt,status from PlanChapt where ID = ?");
+				$sth -> execute ($row[0]);
+$sth = $dbh -> prepare ("SELECT DocType,Chapter,Description from chapters where ShopList like \"%@row[2]%\" order by DocType");
+$sth -> execute () or $out .= "error in execution str 233";
+				my $sth7 = $dbh -> prepare ("select Chapts,Finding,Level,STAtus from findings where AID = ?");
+				$sth7 -> execute ($row[0]);
+				while (@PT = $sth7 -> fetchrow_array){
+	push @Cha,$PT[0]; push @Fnd,$PT[1]; push @LV,$PT[2]; push @STA,$PT[3];
+
+									}
+                                               # for ($n = 0;$n<=$#Cha;$n++){
+                                               # if ($put[1] = $Cha[$n]){push @FDescr,$Fnd[$n];}else{@FDescr = '';}
+                                               # }
+
+$i = 1;
+#<<EON;
+$out = 
+"<br><br><b>Audit Plan Number $input</b><br>
+<hr><table border = '1' align=left>
+ <tr>
+<td>Type<br> $row[1]</td>
+<td>Subject<br> $row[2]</td>
+<td>Start date<br> $row[3]</td>
+<td>Company<br> $row[4]</td>
+<td>Auditor<br> $row[5]</td>
+<td>Observer<br> $row[6]</td>
+<td>Expert<br> $row[7]</td>
+<td>Status<br> $row[8]</td>
+<td>Test field<br> </td>
+</tr>
+</table><br><br><br><br>
+";
+
+                                      $out .= "
+                                        <table border = '1' align=left>
+                                        <tr>
+					<td>Number</td>
+                                        <td>Doc Type</td>
+                                        <td>Chapter</td>
+                                        <td>Description</td>
+					<td>Findings</td>
+                                      </tr>";
+
+while (@put = $sth -> fetchrow_array){
+$Ref = qq^<div id = "Me$i"><input type = "hidden" id = "S$i" value ="$put[1]">
+<a href = '#' onClick = 'javascript:window.open("http:\/\/172.18.10.48/cgi-bin/YT/AUDIT/AddFin?Chapt=$put[1]&AID=$row[0]","Add Finding",
+"Width=600,Height=525,toolbar=0,status=0,border=0,scrollbars=1")'>Add Finding</a>
+</div>^;
+                                                for ($n = 0;$n<=$#Cha;$n++){
+						$k = 1;
+						if ($STA[$n] =~ /Open/){$style = "color: black;"}else{$style = "color: green;"}
+                                                if ( $Cha[$n] =~ /$put[1]/){
+						$k =$k+$n;
+		push @FDescr,qq^<span style = "$style">$k)($STA[$n])  $Fnd[$n]</span><BR>^;
+										}
+                                                }
+
+
+		
+                                      $out .= " <tr>
+					<td>$i</td>
+                                        <td>$put[0]</td>
+					<td>$put[1]</td>
+					<td>$put[2]</td>
+      					<td>
+                                        $Ref<br>@FDescr
+                                        </td>
+                                      </tr>";
+$i++;
+@FDescr = ();
+}
+
+
+ $out .='</table>';
+#EON
+ $sth -> finish();
+ $dbh -> disconnect();
+
+        return ($out);
+
+}
+
+sub AdFin {
+
+}
+
+sub Login {
+my $input;
+my $input2;
+my @result;
+my @scan;
+my $GlobalLogin;
+my $dbh;
+my $log;
+my $out;
+use DBI;
+                $input = shift;
+                $input2 = shift;
+        my $dsn = 'DBI:mysql:YTD:localhost';
+        my $db_user_name = 'root';
+        my $db_password = 'sh7XclC';
+        $dbh = DBI -> connect ($dsn, $db_user_name, $db_password) or die "error can\'t connect to DB";
+
+
+                                   my  $sth = $dbh -> prepare ("select status,NAME from LOGIN where LOGIN = ? and PASS = ?");
+                                       $sth -> execute ($input,$input2);
+                                   while (@scan = $sth -> fetchrow_array){$result[0] = $scan[0]; $GlobalLogin = $scan[1];}
+                                        $sth -> finish();
+                                        $dbh -> disconnect();
+                                    if (@result[0] eq "Auditor") {
+						#$log = "$GlobalLogin has entered to  'AUDITOR'";
+                                                return (&HTML_1($GlobalLogin));
+                                              }
+                  if (@result[0] !~ "Auditor"){
+                                                                        @result =<<EOD;
+<img src="/Cimg/Forbidden.jpeg">
+access forbidden
+
+EOD
+                                                                        return @result;       }
+
+
+}
+
+
+sub HTML{
+my $GlobalLogin;
+my $main;
+my $enter = shift;
+my $html=<<EOHTML;
+
+        <HTML>
+
+                 <HEAD>
+<title>AUDITOR</title>
+<link rel="stylesheet" type="text/css" href="/lma.css" />
+  <style>
+        font-family: helvetica;
+        font-size: 10pt;
+        button:hover {color:red;}
+        </style>
+
+</HEAD>
+
+                           <BODY>
+                                <h2 align=center>AUDITOR</h2><br>
+                                <div id="main" align = center>
+                <tr>
+                <td>
+                Enter your data:<br>
+               <input type="text" name="val1" id="val1" placeholder="Login"><br>
+               <input type="password" name="val2" id="val2" placeholder="Password">
+                </td>
+                <td><br>
+                <BUTTON class = "Mmenu" onclick="JS_Login( ['val1','val2'], ['main'] );">Confirm<br>
+                </td>
+             </tr>
+        </div>
+
+
+                </BODY>
+
+         </HTML>
+
+EOHTML
+return ("$html");
+         }
+
+sub HTML_1 {
+my $enter = shift;
+my $html=<<EOHTML;
+
+        <HTML>
+
+
+                <BODY>
+ <style>
+   a {
+    color: #000080; /* Цвет обычной ссылки */
+    padding: 2px; /* Поля вокруг текста */
+   }
+   a:visited {
+    color: #800080; /* Цвет посещенной ссылки */
+   }
+   a:hover {
+    text-decoration: none; /* Убираем подчеркивание */
+    color: #000000; /* Цвет ссылки при наведении на нее курсора мыши */
+    background: #558165; /* Цвет фона */
+    border-radius: 4;
+   }
+</style>
+<h5 align = center>$enter has entered</h5>
+
+                        <input type="hidden" id="test" name="test" value="2">
+                                <div id="menubar" align = center><br>
+                                        <BUTTON class = "Mmenu" OnClick="JS_Create(['test'],['creature']);">Create Audit Plan</BUTTON>
+					<BUTTON class = "Mmenu" OnClick="JS_View(['test'],['creature']);">View Audit Details</BUTTON>
+					<BUTTON class = "Mmenu" OnClick="JS_Report(['test'],['main']);">Create Reports</BUTTON>
+                                </div>
+                                <DIV id="creature" align = center></DIV>
+
+
+
+                </BODY>
+
+         </HTML>
+
+EOHTML
+
+return ($html);
+
+
+
+
+}
